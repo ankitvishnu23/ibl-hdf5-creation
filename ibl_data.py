@@ -6,7 +6,11 @@ import argparse
 import brainbox.io.one as bbone
 from numpy import genfromtxt
 from one.api import ONE
-from brainbox.processing import bincount2D
+
+from label_helpers import load_raw_labels
+from label_helpers import resize_labels
+from label_helpers import get_frames_from_idxs
+from neural_helpers import get_spike_trial_data
 
 def build_hdf5_for_decoding(
         save_file, video_file, spikes, trial_data=None, labels=None, pose_algo=None, xpix=None,
@@ -129,7 +133,7 @@ def build_hdf5_for_decoding(
             # neural data
             # ----------------------------------------------------------------------------
             group_n.create_dataset(
-                'trial_%04i' % tr_idx, data=spikes, dtype='uint8')
+                'trial_%04i' % tr_idx, data=spikes[tr_idx], dtype='uint8')
 
             # ----------------------------------------------------------------------------
             # label data
@@ -151,211 +155,7 @@ def build_hdf5_for_decoding(
                 group_l.create_dataset('trial_%04i' % tr_idx, data=labels_tmp, dtype='float32')
 
 
-def load_raw_labels(labels_arr, pose_algo, likelihood_thresh=0.9):
-    """Load labels and build masks from a variety of standardized source files.
-
-    This function currently supports the loading of csv and h5 files output by DeepLabCut (DLC) and
-    Deep Graph Pose (DGP).
-
-    Parameters
-    ----------
-    file_path : :obj:`str`
-        absolute file path of label file
-    pose_algo : :obj:`str`
-        'dlc' | 'dgp'
-    likelihood_thresh : :obj:`float`
-        likelihood threshold used to define masks; any labels/timepoints with a likelihood below
-        this value will be set to NaN and the corresponding masks file with have a 0
-
-    Returns
-    -------
-    :obj:`tuple`
-        - (array-like): labels, all x-values first, then all y-values
-        - (array-like): masks; 1s correspond to good values, 0s correspond to bad values
-
-    """
-    if pose_algo == 'dlc' or pose_algo == 'dgp':
-        labels_tmp = labels_arr.to_numpy().astype('float') # get rid of headers, etc.
-        xvals = labels_tmp[:, 0::3]
-        yvals = labels_tmp[:, 1::3]
-        likes = labels_tmp[:, 2::3]
-        labels = np.hstack([xvals, yvals])
-        likes = np.hstack([likes, likes])
-        masks = 1.0 * (likes >= likelihood_thresh)
-        labels[masks != 1] = np.nan
-    elif pose_algo == 'dpk':
-        raise NotImplementedError
-    elif pose_algo == 'leap':
-        raise NotImplementedError
-    else:
-        raise NotImplementedError('the pose algorithm "%s" is currently unsupported' % pose_algo)
-
-    return labels, masks
-
-
-def resize_labels(labels, xpix_new, ypix_new, xpix_old, ypix_old):
-    """Update label values to reflect scale of corresponding images.
-
-    Parameters
-    ----------
-    labels : :obj:`array-like`
-        np.ndarray of shape (n_time, 2 * n_labels); for a given row, all x-values come first,
-        followed by all y-values
-    xpix_new : :obj:`int`
-        xpix of new images
-    ypix_new : :obj:`int`
-        ypix of new images
-    xpix_old : :obj:`int`
-        xpix of original images
-    ypix_old : :obj:`int`
-        ypix of original images
-
-
-    Returns
-    -------
-    array-like
-        resized label values
-
-    """
-    if xpix_new is None or ypix_new is None:
-        return labels
-    else:
-        n_labels = labels.shape[1] // 2
-        old = np.array([xpix_old] * n_labels + [ypix_old] * n_labels)
-        new = np.array([xpix_new] * n_labels + [ypix_new] * n_labels)
-        labels_scale = (labels / old) * new
-        return labels_scale
-
-
-def get_frames_from_idxs(cap, idxs):
-    is_contiguous = np.sum(np.diff(idxs)) == (len(idxs) - 1)
-    n_frames = len(idxs)
-    if n_frames == 0:
-        return None
-    for fr, i in enumerate(idxs):
-        if fr == 0 or not is_contiguous:
-            cap.set(1, i)
-        ret, frame = cap.read()
-        if ret:
-            if fr == 0:
-                height, width, _ = frame.shape
-                frames = np.zeros((n_frames, 1, height, width), dtype='uint8')
-            frames[fr, 0, :, :] = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        else:
-            print('warning! reached end of video; returning blank frames for remainder of ' +
-                'requested indices')
-            break
-    return frames
-
-
-def get_spike_data_per_trial(times, clusters, intervals, binsize=0.02):
-    """Select spiking data for specified interval on each trial.
-    Parameters
-    ----------
-    times : array-like
-        time in seconds for each spike
-    clusters : array-like
-        cluster id for each spike
-    interval_begs : array-like
-        beginning of each interval in seconds
-    interval_ends : array-like
-        end of each interval in seconds
-    binsize : float
-        width of each bin in seconds; default 20 ms
-    Returns
-    -------
-    tuple
-        - (list): time in seconds for each trial
-        - (list): data for each trial of shape (n_clusters, n_bins)
-    """
-
-    interval_begs = intervals[:, 0]
-    interval_ends = intervals[:, 1]
-    n_trials = len(interval_begs)
-    n_bins = int((interval_ends[0] - interval_begs[0]) / binsize) + 1
-    cluster_ids = np.unique(clusters)
-    n_clusters_in_region = len(cluster_ids)
-
-    binned_spikes = np.zeros((n_trials, n_clusters_in_region, n_bins))
-    spike_times_list = []
-    for tr, (t_beg, t_end) in enumerate(zip(interval_begs, interval_ends)):
-        # just get spikes for this region/trial
-        idxs_t = (times >= t_beg) & (times < t_end)
-        times_curr = times[idxs_t]
-        clust_curr = clusters[idxs_t]
-        if times_curr.shape[0] == 0:
-            # no spikes in this trial
-            binned_spikes_tmp = np.zeros((n_clusters_in_region, n_bins))
-            t_idxs = np.arange(t_beg, t_end + binsize / 2, binsize)
-            idxs_tmp = np.arange(n_clusters_in_region)
-        else:
-            # bin spikes
-            binned_spikes_tmp, t_idxs, cluster_idxs = bincount2D(
-                times_curr, clust_curr, xbin=binsize, xlim=[t_beg, t_end])
-            # find indices of clusters that returned spikes for this trial
-            _, idxs_tmp, _ = np.intersect1d(cluster_ids, cluster_idxs, return_indices=True)
-
-        # update data block
-        binned_spikes[tr, idxs_tmp, :] += binned_spikes_tmp[:, :n_bins]
-        spike_times_list.append(t_idxs[:n_bins])
-
-    return spike_times_list, binned_spikes
-
-
-def get_spike_trial_data(times, clusters, intervals, binsize=0.02):
-    """Select spiking data for specified interval on each trial.
-    Parameters
-    ----------
-    times : array-like
-        time in seconds for each spike
-    clusters : array-like
-        cluster id for each spike
-    interval_begs : array-like
-        beginning of each interval in seconds
-    interval_ends : array-like
-        end of each interval in seconds
-    binsize : float
-        width of each bin in seconds; default 20 ms
-    Returns
-    -------
-    tuple
-        - (list): time in seconds for each trial
-        - (list): data for each trial of shape (n_clusters, n_bins)
-    """
-
-    n_trials = len(intervals)
-    cluster_ids = np.unique(clusters)
-    n_clusters_in_region = len(cluster_ids)
-
-    binned_spikes = []
-    spike_times_list = []
-    for tr, (t_beg, t_end) in enumerate(zip(interval_begs, interval_ends)):
-        # just get spikes for this region/trial
-        idxs_t = (times >= t_beg) & (times < t_end)
-        temp_n_bins = int((t_end - t_beg) / binsize) + 1
-        times_curr = times[idxs_t]
-        clust_curr = clusters[idxs_t]
-        binned_spikes_tmp = np.zeros((temp_n_bins, n_clusters_in_region))
-        if times_curr.shape[0] == 0:
-            # no spikes in this trial
-            t_idxs = np.arange(t_beg, t_end + binsize / 2, binsize)
-            idxs_tmp = np.arange(n_clusters_in_region)
-        else:
-            # bin spikes
-            bincount_spikes, t_idxs, cluster_idxs = bincount2D(
-                clust_curr, times_curr, ybin=binsize, ylim=[t_beg, t_end])
-            # find indices of clusters that returned spikes for this trial
-            _, idxs_tmp, _ = np.intersect1d(cluster_ids, cluster_idxs, return_indices=True)
-            binned_spikes_tmp[:, idxs_tmp] += bincount_spikes
-
-        # update data block
-        binned_spikes.append(binned_spikes_tmp)
-        spike_times_list.append(t_idxs)
-
-    return spike_times_list, np.asarray(binned_spikes)
-
-
-def main(save_dir, eid):
+def main(save_dir, eid, xpix, ypix):
     # create directory for raw data if it doesn't already exist
     if not os.path.exists(os.path.dirname(save_dir + '/raw_data')):
         os.makedirs(os.path.dirname(save_dir + '/raw_data'))
@@ -390,9 +190,9 @@ def main(save_dir, eid):
     spike_times = spikes['probe00']['times']
     spike_clusters = spikes['probe00']['clusters']
 
-    spike_times_list, binned_spikes = get_spike_data_per_trial(spike_times, spike_clusters, trial_data, float(1000/60))
+    spike_times_list, binned_spikes = get_spike_trial_data(spike_times, spike_clusters, trial_data, float(1000/60000))
 
-    build_hdf5_for_decoding(save_dir + '/data.hdf5', str(cam_data), binned_spikes, trial_data, label_data, 'dlc', xpix=160, ypix=128)
+    build_hdf5_for_decoding(save_dir + '/data.hdf5', str(cam_data), binned_spikes, trial_data, label_data, 'dlc', xpix=xpix, ypix=ypix)
 
 
 if __name__ == '__main__':
@@ -400,13 +200,17 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser("IBL data retrieval, processing, and saving")
     parser.add_argument("-dir", "--save_dir", help="The absolute directory path where to save the raw data and HDF5 file - do not include / at the end of the path (directory does not need to exist)", type=str)
     parser.add_argument("-e", "--eid", help="experiment id for IBL data to retrieve.", type=str)
+    parser.add_argument("-x", "--x_pix", help="The x resolution to which the video will be downsampled - ex. 160", type=int)
+    parser.add_argument("-y", "--y_pix", help="The y resolution to which the video will be downsampled - ex. 128", type=int)
     args = parser.parse_args()
 
     # retreiving params
     save_dir = args.save_dir
     eid = args.eid
+    xpix = args.x_pix
+    ypix = args.y_pix
 
-    main(save_dir, eid)
+    main(save_dir, eid, xpix, ypix)
 
 
 
