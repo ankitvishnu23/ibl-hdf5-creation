@@ -15,4 +15,6 @@ To create data file:
   3. cd into ibl-hdf5-creation folder
   4. Run "pip install requirements.txt"
   5. Run "pip install -e ."
-  6. Run "python data_creation.py --save_dir [absolute_path] --eid [ONE experiment_id]
+  6. Run "python data_creation.py --save_dir [absolute_path (str)] --eid [ONE experiment_id (str)] 
+                                  (optional) --x_pix [pixel width to downsample (int)]
+                                  (optional) --y_pix [pixel height to downsample (int)]
