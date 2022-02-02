@@ -10,11 +10,13 @@ https://behavenet.readthedocs.io/en/latest/source/data_structure.html#data-struc
 For more help with the script run: python data_creation.py -h
 
 To create data file: 
-  1. Create/cd into directory for this repo
-  2. Clone repo in directory
-  3. cd into ibl-hdf5-creation folder
-  4. Run "pip install requirements.txt"
-  5. Run "pip install -e ."
-  6. Run "python data_creation.py --save_dir [absolute_path (str)] --eid [ONE experiment_id (str)] 
+  1. Create or use a previous conda environment (to create new: conda create --name=decodingdata python=3.7.2)
+  3. Activate conda environment (ex: conda activate decodingdata)
+  4. Create/cd into directory for this repo
+  5. Clone repo in directory
+  6. cd into ibl-hdf5-creation folder
+  7. Run "pip install -r requirements.txt"
+  8. Run "pip install -e ."
+  9. Run "python data_creation.py --save_dir [absolute_path (str)] --eid [ONE experiment_id (str)] 
                                   (optional) --x_pix [pixel width to downsample (int)]
                                   (optional) --y_pix [pixel height to downsample (int)]
