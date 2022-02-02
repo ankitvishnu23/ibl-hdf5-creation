@@ -1,0 +1,6 @@
+h5py
+matplotlib
+numpy
+ONE-api
+ibllib
+opencv-python
