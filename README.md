@@ -1,10 +1,13 @@
 # ibl-hdf5-creation
 
 This script file data_creation.py takes in an eid (experiment id) and absolute directory 
-path - both strings - and pulls and formats video, label, and neural data for decoding. It stores
+path - both strings - and pulls and formats video, label, and neural data for decoding. It can also 
+take in an x pixels and y pixels argument for downsampling the video recording. It stores
 this data in an HDF5 file broken up into groups (images, labels, neural) with each group populated
 with datasets corresponding to each trial. Follows formatting given by the IBL Behavenet API:
 https://behavenet.readthedocs.io/en/latest/source/data_structure.html#data-structure
+
+For more help with the script run: python data_creation.py -h
 
 To create data file: 
   1. Create/cd into directory for this repo
