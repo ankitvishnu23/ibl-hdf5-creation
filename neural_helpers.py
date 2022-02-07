@@ -36,6 +36,8 @@ def get_spike_trial_data(times, clusters, intervals, binsize=0.02):
         temp_n_bins = int((t_end - t_beg) / binsize) + 1
         times_curr = times[idxs_t]
         clust_curr = clusters[idxs_t]
+        # t_beg = np.floor(t_beg/binsize) * binsize
+        t_end = np.floor(t_end/binsize) * binsize
         if times_curr.shape[0] == 0:
             # no spikes in this trial
             binned_spikes_tmp = np.zeros((temp_n_bins, n_clusters_in_region))
@@ -49,13 +51,18 @@ def get_spike_trial_data(times, clusters, intervals, binsize=0.02):
             _, idxs_tmp, _ = np.intersect1d(cluster_ids, cluster_idxs, return_indices=True)
             binned_spikes_tmp = np.zeros((bincount_spikes.shape[0], n_clusters_in_region))
             binned_spikes_tmp[:, idxs_tmp] += bincount_spikes
+            if tr == 2 or tr == 5:
+            	print(t_idxs)
+            	print(cluster_idxs)
+            	print(bincount_spikes[0])
+            	print(bincount_spikes[-1])
 
         # update data block
         binned_spikes.append(binned_spikes_tmp)
         spike_times_list.append(t_idxs)
 
-    return spike_times_list, np.asarray(binned_spikes)
-    
+    return spike_times_list, binned_spikes
+
 
 def bincount2D(x, y, xbin=0, ybin=0, xlim=None, ylim=None, weights=None):
     """
@@ -96,7 +103,7 @@ def bincount2D(x, y, xbin=0, ybin=0, xlim=None, ylim=None, weights=None):
     yscale, yind = _get_scale_and_indices(y, ybin, ylim)
     # aggregate by using bincount on absolute indices for a 2d array
     nx, ny = [xscale.size, yscale.size]
-    ind2d = np.ravel_multi_index(np.c_[yind, xind].transpose(), dims=(ny, nx))
+    ind2d = np.ravel_multi_index(np.c_[yind, xind].transpose(), dims=(ny, nx), mode='clip')
     r = np.bincount(ind2d, minlength=nx * ny, weights=weights).reshape(ny, nx)
 
     # if a set of specific values is requested output an array matching the scale dimensions
