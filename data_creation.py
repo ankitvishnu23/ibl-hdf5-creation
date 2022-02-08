@@ -113,7 +113,7 @@ def build_hdf5_for_decoding(
             # find video timestamps during this trial
             trial_beg = trial_info[trial][0] * fps
             trial_end = trial_info[trial][1] * fps
-
+            
             ts_idxs = np.where((timestamps >= trial_beg) & (timestamps < trial_end))[0]
 
             # ----------------------------------------------------------------------------
@@ -132,8 +132,10 @@ def build_hdf5_for_decoding(
             # ----------------------------------------------------------------------------
             # neural data
             # ----------------------------------------------------------------------------
+            # spike_times_list, binned_spikes = 
+            #     get_spike_trial_data(spike_times, spike_clusters, trial_data[trial], len(ts_idxs), float(1/60))
             group_n.create_dataset(
-                'trial_%04i' % tr_idx, data=spikes[tr_idx], dtype='uint8')
+                'trial_%04i' % tr_idx, data=spikes[trial], dtype='uint8')
 
             # ----------------------------------------------------------------------------
             # label data
@@ -190,7 +192,7 @@ def main(save_dir, eid, xpix, ypix):
     spike_times = spikes['probe00']['times']
     spike_clusters = spikes['probe00']['clusters']
 
-    spike_times_list, binned_spikes = get_spike_trial_data(spike_times, spike_clusters, trial_data, float(1000/60000))
+    spike_times_list, binned_spikes = get_spike_trial_data(spike_times, spike_clusters, trial_data, float(1/60))
 
     build_hdf5_for_decoding(save_dir + '/data.hdf5', str(cam_data), binned_spikes, trial_data, label_data, 'dlc', xpix=xpix, ypix=ypix)
 
@@ -198,10 +200,14 @@ def main(save_dir, eid, xpix, ypix):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser("IBL data retrieval, processing, and saving")
-    parser.add_argument("-dir", "--save_dir", help="The absolute directory path where to save the raw data and HDF5 file - do not include / at the end of the path (directory does not need to exist)", type=str)
-    parser.add_argument("-e", "--eid", help="experiment id for IBL data to retrieve.", type=str)
-    parser.add_argument("-x", "--x_pix", help="The x resolution to which the video will be downsampled - ex. 160", type=int)
-    parser.add_argument("-y", "--y_pix", help="The y resolution to which the video will be downsampled - ex. 128", type=int)
+    parser.add_argument("-dir", "--save_dir", 
+        help="The absolute directory path where to save the raw data and HDF5 file - do not include / at the end of the path (directory does not need to exist)", type=str)
+    parser.add_argument("-e", "--eid", 
+        help="experiment id for IBL data to retrieve.", type=str)
+    parser.add_argument("-x", "--x_pix", 
+        help="The x resolution to which the video will be downsampled - ex. 160", type=int)
+    parser.add_argument("-y", "--y_pix", 
+        help="The y resolution to which the video will be downsampled - ex. 128", type=int)
     args = parser.parse_args()
 
     # retreiving params

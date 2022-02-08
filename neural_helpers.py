@@ -11,10 +11,8 @@ def get_spike_trial_data(times, clusters, intervals, binsize=0.02):
         time in seconds for each spike
     clusters : array-like
         cluster id for each spike
-    interval_begs : array-like
-        beginning of each interval in seconds
-    interval_ends : array-like
-        end of each interval in seconds
+    intervals : array-like
+        beginning and end of each interval in seconds
     binsize : float
         width of each bin in seconds; default 20 ms
     Returns
@@ -54,8 +52,8 @@ def get_spike_trial_data(times, clusters, intervals, binsize=0.02):
         binned_spikes.append(binned_spikes_tmp)
         spike_times_list.append(t_idxs)
 
-    return spike_times_list, np.asarray(binned_spikes)
-    
+    return spike_times_list, binned_spikes
+
 
 def bincount2D(x, y, xbin=0, ybin=0, xlim=None, ylim=None, weights=None):
     """
@@ -85,7 +83,10 @@ def bincount2D(x, y, xbin=0, ybin=0, xlim=None, ylim=None, weights=None):
     def _get_scale_and_indices(v, bin, lim):
         # if bin is a nonzero scalar, this is a bin size: create scale and indices
         if np.isscalar(bin) and bin != 0:
-            scale = np.arange(lim[0], lim[1], bin)
+            # to match the number of cam frames
+            scale_beg = np.ceil(round(lim[0]/bin, 3)) 
+            scale_end = np.ceil(lim[1]/bin)
+            scale = np.arange(scale_beg, scale_end)
             ind = (np.floor((v - lim[0]) / bin)).astype(np.int64)
         # if bin == 0, aggregate over unique values
         else:
@@ -96,7 +97,7 @@ def bincount2D(x, y, xbin=0, ybin=0, xlim=None, ylim=None, weights=None):
     yscale, yind = _get_scale_and_indices(y, ybin, ylim)
     # aggregate by using bincount on absolute indices for a 2d array
     nx, ny = [xscale.size, yscale.size]
-    ind2d = np.ravel_multi_index(np.c_[yind, xind].transpose(), dims=(ny, nx))
+    ind2d = np.ravel_multi_index(np.c_[yind, xind].transpose(), dims=(ny, nx), mode='clip')
     r = np.bincount(ind2d, minlength=nx * ny, weights=weights).reshape(ny, nx)
 
     # if a set of specific values is requested output an array matching the scale dimensions
