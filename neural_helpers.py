@@ -11,10 +11,8 @@ def get_spike_trial_data(times, clusters, intervals, binsize=0.02):
         time in seconds for each spike
     clusters : array-like
         cluster id for each spike
-    interval_begs : array-like
-        beginning of each interval in seconds
-    interval_ends : array-like
-        end of each interval in seconds
+    intervals : array-like
+        beginning and end of each interval in seconds
     binsize : float
         width of each bin in seconds; default 20 ms
     Returns
@@ -36,8 +34,6 @@ def get_spike_trial_data(times, clusters, intervals, binsize=0.02):
         temp_n_bins = int((t_end - t_beg) / binsize) + 1
         times_curr = times[idxs_t]
         clust_curr = clusters[idxs_t]
-        # t_beg = np.floor(t_beg/binsize) * binsize
-        t_end = np.floor(t_end/binsize) * binsize
         if times_curr.shape[0] == 0:
             # no spikes in this trial
             binned_spikes_tmp = np.zeros((temp_n_bins, n_clusters_in_region))
@@ -51,11 +47,6 @@ def get_spike_trial_data(times, clusters, intervals, binsize=0.02):
             _, idxs_tmp, _ = np.intersect1d(cluster_ids, cluster_idxs, return_indices=True)
             binned_spikes_tmp = np.zeros((bincount_spikes.shape[0], n_clusters_in_region))
             binned_spikes_tmp[:, idxs_tmp] += bincount_spikes
-            if tr == 2 or tr == 5:
-            	print(t_idxs)
-            	print(cluster_idxs)
-            	print(bincount_spikes[0])
-            	print(bincount_spikes[-1])
 
         # update data block
         binned_spikes.append(binned_spikes_tmp)
@@ -92,7 +83,10 @@ def bincount2D(x, y, xbin=0, ybin=0, xlim=None, ylim=None, weights=None):
     def _get_scale_and_indices(v, bin, lim):
         # if bin is a nonzero scalar, this is a bin size: create scale and indices
         if np.isscalar(bin) and bin != 0:
-            scale = np.arange(lim[0], lim[1], bin)
+            # to match the number of cam frames
+            scale_beg = np.ceil(round(lim[0]/bin, 3)) 
+            scale_end = np.ceil(lim[1]/bin)
+            scale = np.arange(scale_beg, scale_end)
             ind = (np.floor((v - lim[0]) / bin)).astype(np.int64)
         # if bin == 0, aggregate over unique values
         else:

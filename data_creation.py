@@ -13,7 +13,7 @@ from label_helpers import get_frames_from_idxs
 from neural_helpers import get_spike_trial_data
 
 def build_hdf5_for_decoding(
-        save_file, video_file, spike_times, spike_clusters, trial_data=None, labels=None, pose_algo=None, xpix=None,
+        save_file, video_file, spikes, trial_data=None, labels=None, pose_algo=None, xpix=None,
         ypix=None, label_likelihood_thresh=0.9, zscore=True):
     """Build Behavenet-style HDF5 file from video file and optional label file.
 
@@ -54,9 +54,6 @@ def build_hdf5_for_decoding(
     xpix_og = int(video_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     ypix_og = int(video_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = int(video_cap.get(cv2.CAP_PROP_FPS))
-
-    print(video_cap.get(cv2.CAP_PROP_POS_MSEC))
-    print(4)
 
     # load labels
     if labels is not None:
@@ -106,7 +103,7 @@ def build_hdf5_for_decoding(
             # create labels group (not z-scored, but downsampled if necessary)
             group_l = f.create_group('labels')
 
-        if spike_times is not None: 
+        if spikes is not None: 
             # create neural group 
             group_n = f.create_group('neural')
 
@@ -135,10 +132,10 @@ def build_hdf5_for_decoding(
             # ----------------------------------------------------------------------------
             # neural data
             # ----------------------------------------------------------------------------
-            spike_times_list, binned_spikes = 
-                get_spike_trial_data(spike_times, spike_clusters, trial_data, len(ts_idxs), float(1/60))
+            # spike_times_list, binned_spikes = 
+            #     get_spike_trial_data(spike_times, spike_clusters, trial_data[trial], len(ts_idxs), float(1/60))
             group_n.create_dataset(
-                'trial_%04i' % tr_idx, data=binned_spikes, dtype='uint8')
+                'trial_%04i' % tr_idx, data=spikes[trial], dtype='uint8')
 
             # ----------------------------------------------------------------------------
             # label data
@@ -194,11 +191,10 @@ def main(save_dir, eid, xpix, ypix):
     spikes, clusters, channels = bbone.load_spike_sorting_with_channel(eid, one=one)
     spike_times = spikes['probe00']['times']
     spike_clusters = spikes['probe00']['clusters']
-    spike_data = [spike_times, spike_clusters]
 
-    # spike_times_list, binned_spikes = get_spike_trial_data(spike_times, spike_clusters, trial_data, float(1/60))
+    spike_times_list, binned_spikes = get_spike_trial_data(spike_times, spike_clusters, trial_data, float(1/60))
 
-    build_hdf5_for_decoding(save_dir + '/data.hdf5', str(cam_data), spike_times, spike_clusters, trial_data, label_data, 'dlc', xpix=xpix, ypix=ypix)
+    build_hdf5_for_decoding(save_dir + '/data.hdf5', str(cam_data), binned_spikes, trial_data, label_data, 'dlc', xpix=xpix, ypix=ypix)
 
 
 if __name__ == '__main__':
