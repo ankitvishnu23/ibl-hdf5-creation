@@ -31,7 +31,7 @@ def get_spike_trial_data(times, clusters, intervals, binsize=0.02):
     for tr, (t_beg, t_end) in enumerate(intervals):
         # just get spikes for this region/trial
         idxs_t = (times >= t_beg) & (times < t_end)
-        temp_n_bins = int((t_end - t_beg) / binsize) + 1
+        temp_n_bins = int(t_end - t_beg) + 1
         times_curr = times[idxs_t]
         clust_curr = clusters[idxs_t]
         if times_curr.shape[0] == 0:
@@ -84,10 +84,9 @@ def bincount2D(x, y, xbin=0, ybin=0, xlim=None, ylim=None, weights=None):
         # if bin is a nonzero scalar, this is a bin size: create scale and indices
         if np.isscalar(bin) and bin != 0:
             # to match the number of cam frames
-            scale_beg = np.ceil(round(lim[0]/bin, 3)) 
-            scale_end = np.ceil(lim[1]/bin)
-            scale = np.arange(scale_beg, scale_end)
-            ind = (np.floor((v - lim[0]) / bin)).astype(np.int64)
+            t_beg = lim[0] * bin
+            scale = np.arange(lim[0], lim[1])
+            ind = (np.floor((v - t_beg) / bin)).astype(np.int64)
         # if bin == 0, aggregate over unique values
         else:
             scale, ind = np.unique(v, return_inverse=True)

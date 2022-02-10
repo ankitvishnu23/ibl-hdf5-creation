@@ -10,10 +10,11 @@ from one.api import ONE
 from label_helpers import load_raw_labels
 from label_helpers import resize_labels
 from label_helpers import get_frames_from_idxs
+from label_helpers import get_highest_me_trials
 from neural_helpers import get_spike_trial_data
 
 def build_hdf5_for_decoding(
-        save_file, video_file, spikes, trial_data=None, labels=None, pose_algo=None, xpix=None,
+        save_file, video_file, spikes, batch_size=None, num_batches=None, trial_data=None, labels=None, pose_algo=None, xpix=None,
         ypix=None, label_likelihood_thresh=0.9, zscore=True):
     """Build Behavenet-style HDF5 file from video file and optional label file.
 
@@ -67,9 +68,19 @@ def build_hdf5_for_decoding(
     if trial_data is not None:
         trial_info = trial_data
         n_trials = len(trial_info)
-    else: 
+        trials = np.arange(n_trials)
+    elif trial_data is None and num_batches != None and batch_size != None:
+        # get the num_batches highest motion energy trials - give x & y pix of left and right paws 
+        trials = get_highest_me_trials(labels[:, np.asarray([5, 6, 16, 17])], batch_size, num_batches)
+    else:
         n_trials = int(np.ceil(n_total_frames / batch_size))
-    trials = np.arange(n_trials)
+        trials = np.arange(n_trials)
+
+    if spikes is not None: 
+        spike_times = spikes[0]
+        spike_clusters = spikes[1]
+        spike_times_list, binned_spikes = 
+            get_spike_trial_data(spike_times, spike_clusters, trial_info, float(1/60))
 
     timestamps = np.arange(n_total_frames)
 
@@ -111,8 +122,12 @@ def build_hdf5_for_decoding(
         for tr_idx, trial in enumerate(trials):
 
             # find video timestamps during this trial
-            trial_beg = trial_info[trial][0] * fps
-            trial_end = trial_info[trial][1] * fps
+            if trial_data is not None:
+                trial_beg = trial_info[trial][0] * fps
+                trial_end = trial_info[trial][1] * fps
+            else:
+                trial_beg = trial * batch_size
+                trial_end = (trial + 1) * batch_size
             
             ts_idxs = np.where((timestamps >= trial_beg) & (timestamps < trial_end))[0]
 
@@ -132,10 +147,10 @@ def build_hdf5_for_decoding(
             # ----------------------------------------------------------------------------
             # neural data
             # ----------------------------------------------------------------------------
-            # spike_times_list, binned_spikes = 
-            #     get_spike_trial_data(spike_times, spike_clusters, trial_data[trial], len(ts_idxs), float(1/60))
+            spike_times_list, binned_spikes = 
+                get_spike_trial_data(spike_times, spike_clusters, [[trial_beg, trial_end]], float(1/60))
             group_n.create_dataset(
-                'trial_%04i' % tr_idx, data=spikes[trial], dtype='uint8')
+                'trial_%04i' % tr_idx, data=binned_spikes[0], dtype='uint8')
 
             # ----------------------------------------------------------------------------
             # label data
@@ -157,7 +172,7 @@ def build_hdf5_for_decoding(
                 group_l.create_dataset('trial_%04i' % tr_idx, data=labels_tmp, dtype='float32')
 
 
-def main(save_dir, eid, xpix, ypix):
+def main(save_dir, eid, xpix, ypix, batch_size, num_batches):
     # create directory for raw data if it doesn't already exist
     if not os.path.exists(os.path.dirname(save_dir + '/raw_data')):
         os.makedirs(os.path.dirname(save_dir + '/raw_data'))
@@ -173,13 +188,6 @@ def main(save_dir, eid, xpix, ypix):
         print('raw video data not available')
         return
 
-    # get trial dataset if it exists
-    try:
-        trial_data = one.load_dataset(eid, f'alf/_ibl_trials.intervals.npy')
-    except:
-        print('trial data not available')
-        trial_data = None
-
     # get dlc label data if it exists
     try:
         label_data = one.load_dataset(eid, f'alf/_ibl_leftCamera.dlc.pqt')
@@ -192,9 +200,8 @@ def main(save_dir, eid, xpix, ypix):
     spike_times = spikes['probe00']['times']
     spike_clusters = spikes['probe00']['clusters']
 
-    spike_times_list, binned_spikes = get_spike_trial_data(spike_times, spike_clusters, trial_data, float(1/60))
-
-    build_hdf5_for_decoding(save_dir + '/data.hdf5', str(cam_data), binned_spikes, trial_data, label_data, 'dlc', xpix=xpix, ypix=ypix)
+    build_hdf5_for_decoding(save_dir + '/data.hdf5', str(cam_data), [spike_times, spike_clusters], batch_size, 
+        num_batches, labels=label_data, pose_algo='dlc', xpix=xpix, ypix=ypix)
 
 
 if __name__ == '__main__':
@@ -208,6 +215,10 @@ if __name__ == '__main__':
         help="The x resolution to which the video will be downsampled - ex. 160", type=int)
     parser.add_argument("-y", "--y_pix", 
         help="The y resolution to which the video will be downsampled - ex. 128", type=int)
+    parser.add_argument("-bs", "--batch_size", 
+        help="The number of frames to include in a single trial", type=int)
+    parser.add_argument("-nb", "--num_batches", 
+        help="The number of trials used train the model", type=int)
     args = parser.parse_args()
 
     # retreiving params
@@ -215,8 +226,10 @@ if __name__ == '__main__':
     eid = args.eid
     xpix = args.x_pix
     ypix = args.y_pix
+    batch_size = args.batch_size != None ? args.batch_size : None
+    num_batches = args.num_batches != None ? args.num_batches : None
 
-    main(save_dir, eid, xpix, ypix)
+    main(save_dir, eid, xpix, ypix, batch_size, num_batches)
 
 
 
