@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 from numpy import genfromtxt
 
-__all__ = ['load_raw_labels', 'resize_labels', 'get_frames_from_idxs']
+__all__ = ['load_raw_labels', 'resize_labels', 'get_frames_from_idxs', 'get_highest_me_trials']
 
 def load_raw_labels(labels_arr, pose_algo, likelihood_thresh=0.9):
     """Load labels and build masks from a variety of standardized source files.
@@ -99,4 +99,53 @@ def get_frames_from_idxs(cap, idxs):
                 'requested indices')
             break
     return frames
+
+
+def get_highest_me_trials(markers_2d, batch_size, n_batches):
+    """Find trials with highest motion energy to help with batch selection.
+
+    Parameters
+    ----------
+    markers_2d : dict
+        keys are camera names; vals are themselves dicts with marker names; those vals are arrays
+        of shape (n_timepoints, 2), i.e.
+        >> points_2d['left']['paw_l'].shape
+        >> (100, 2)
+    batch_size : int
+        number of contiguous time points per batch
+    n_batches : int
+        total number of batches to add to hdf5
+
+    Returns
+    -------
+    array-like
+        trial indices of the `n_batches` trials with highest motion energy (sorted low to high)
+    """
+
+    # just use paws to compute motion energy
+    if isinstance(markers_2d, dict):
+        vll = np.vstack([np.zeros((1, 2)), np.diff(markers_2d['left']['paw_l'], axis=0)])
+        vlr = np.vstack([np.zeros((1, 2)), np.diff(markers_2d['left']['paw_r'], axis=0)])
+        vrr = np.vstack([np.zeros((1, 2)), np.diff(markers_2d['right']['paw_r'], axis=0)])
+        vrl = np.vstack([np.zeros((1, 2)), np.diff(markers_2d['right']['paw_l'], axis=0)])
+        me_all = np.abs(np.hstack([vll, vlr, vrr, vrl]))
+    else:
+        me_all = np.abs(
+            np.vstack([np.zeros((1, markers_2d.shape[1])), np.diff(markers_2d, axis=0)]))
+
+    n_total_frames = me_all.shape[0]
+    n_trials = int(np.ceil(n_total_frames / batch_size))
+    assert n_trials >= batch_size
+
+    total_me = np.zeros(n_trials)
+    for trial in range(n_trials):
+        trial_beg = trial * batch_size
+        trial_end = (trial + 1) * batch_size
+        total_me[trial] = np.nanmean(me_all[trial_beg:trial_end])
+
+    total_me[np.isnan(total_me)] = -100  # nans get pushed to end of sorted array
+    sorted_me_idxs = np.argsort(total_me)
+    best_trials = sorted_me_idxs[-n_batches:]
+
+    return best_trials
 
