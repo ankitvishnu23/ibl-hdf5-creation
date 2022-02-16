@@ -135,7 +135,7 @@ def get_highest_me_trials(markers_2d, batch_size, n_batches):
 
     n_total_frames = me_all.shape[0]
     n_trials = int(np.ceil(n_total_frames / batch_size))
-    assert n_trials >= batch_size
+    assert n_trials >= n_batches
 
     total_me = np.zeros(n_trials)
     for trial in range(n_trials):

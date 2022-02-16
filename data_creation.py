@@ -3,6 +3,7 @@ import h5py
 import numpy as np
 import os
 import argparse
+import time
 import brainbox.io.one as bbone
 from numpy import genfromtxt
 from one.api import ONE
@@ -64,7 +65,17 @@ def build_hdf5_for_decoding(
         n_total_labels = labels.shape[0]
         assert n_total_frames == n_total_labels, 'Number of frames does not match number of labels'
 
-    # assign trial information based on trial file or uniform batch size
+    # Estimate framerate from video using a portion of the video
+    # start = time.time()
+    # for i in range(10000):
+    #     ret, frame = video_cap.read()
+    # end = time.time()
+
+    # seconds = end - start
+    # fps2 = 10000 / seconds
+    # video_cap = cv2.VideoCapture(video_file)
+
+    # assign trial information based on trial file or highest motion energy with uniform batch size
     if trial_data is not None:
         trial_info = trial_data
         n_trials = len(trial_info)
@@ -76,13 +87,13 @@ def build_hdf5_for_decoding(
         n_trials = int(np.ceil(n_total_frames / batch_size))
         trials = np.arange(n_trials)
 
+    # Number of frames that can be iterated through
+    timestamps = np.arange(n_total_frames)
+
     if spikes is not None: 
         spike_times = spikes[0]
         spike_clusters = spikes[1]
-        spike_times_list, binned_spikes = 
-            get_spike_trial_data(spike_times, spike_clusters, trial_info, float(1/60))
-
-    timestamps = np.arange(n_total_frames)
+        binsize = float(1/fps)
 
     # compute z-score params
     if labels is not None and zscore:
@@ -147,8 +158,8 @@ def build_hdf5_for_decoding(
             # ----------------------------------------------------------------------------
             # neural data
             # ----------------------------------------------------------------------------
-            spike_times_list, binned_spikes = 
-                get_spike_trial_data(spike_times, spike_clusters, [[trial_beg, trial_end]], float(1/60))
+            spike_times_list, binned_spikes = get_spike_trial_data(spike_times, spike_clusters, 
+                [[trial_beg/fps, trial_end/fps]], binsize)
             group_n.create_dataset(
                 'trial_%04i' % tr_idx, data=binned_spikes[0], dtype='uint8')
 
@@ -226,8 +237,8 @@ if __name__ == '__main__':
     eid = args.eid
     xpix = args.x_pix
     ypix = args.y_pix
-    batch_size = args.batch_size != None ? args.batch_size : None
-    num_batches = args.num_batches != None ? args.num_batches : None
+    batch_size = args.batch_size if args.batch_size != None else None
+    num_batches = args.num_batches if args.num_batches != None else None
 
     main(save_dir, eid, xpix, ypix, batch_size, num_batches)
 
