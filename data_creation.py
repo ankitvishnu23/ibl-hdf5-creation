@@ -13,9 +13,10 @@ from label_helpers import resize_labels
 from label_helpers import get_frames_from_idxs
 from label_helpers import get_highest_me_trials
 from neural_helpers import get_spike_trial_data
+from neural_helpers import get_binsize
 
 def build_hdf5_for_decoding(
-        save_file, video_file, spikes, batch_size=None, num_batches=None, trial_data=None, labels=None, pose_algo=None, xpix=None,
+        save_file, video_file, spikes=None, timestamps_file=None, batch_size=None, num_batches=None, trial_data=None, labels=None, pose_algo=None, xpix=None,
         ypix=None, label_likelihood_thresh=0.9, zscore=True):
     """Build Behavenet-style HDF5 file from video file and optional label file.
 
@@ -65,16 +66,6 @@ def build_hdf5_for_decoding(
         n_total_labels = labels.shape[0]
         assert n_total_frames == n_total_labels, 'Number of frames does not match number of labels'
 
-    # Estimate framerate from video using a portion of the video
-    # start = time.time()
-    # for i in range(10000):
-    #     ret, frame = video_cap.read()
-    # end = time.time()
-
-    # seconds = end - start
-    # fps2 = 10000 / seconds
-    # video_cap = cv2.VideoCapture(video_file)
-
     # assign trial information based on trial file or highest motion energy with uniform batch size
     if trial_data is not None:
         trial_info = trial_data
@@ -90,10 +81,18 @@ def build_hdf5_for_decoding(
     # Number of frames that can be iterated through
     timestamps = np.arange(n_total_frames)
 
+    # timestamps of each frame in the video
+    if timestamps_file is not None:
+        frame_times = timestamps_file.iloc[:, 0].to_numpy()
+
     if spikes is not None: 
         spike_times = spikes[0]
         spike_clusters = spikes[1]
-        binsize = float(1/fps)
+        if frame_times is not None:
+            temp_binsize = get_binsize(frame_times)
+        else:
+            temp_binsize = float(1/fps)
+        binsize = float(1/fps) if np.abs(float(1/fps) - temp_binsize) <= 0.01 * temp_binsize else temp_binsize
 
     # compute z-score params
     if labels is not None and zscore:
@@ -192,9 +191,10 @@ def main(save_dir, eid, xpix, ypix, batch_size, num_batches):
     one = ONE(base_url='https://openalyx.internationalbrainlab.org', cache_dir=save_dir + '/raw_data',
           password='international', silent=True)
 
-    # get datasets (currently only using left cam data)
+    # get cam datasets (currently only using left cam data)
     try:
         cam_data = one.load_dataset(eid, f'raw_video_data/_iblrig_leftCamera.raw.mp4')
+        cam_ts = one.load_dataset(eid, f'raw_video_data/_iblrig_leftCamera.timestamps.ssv')
     except:
         print('raw video data not available')
         return
@@ -211,7 +211,7 @@ def main(save_dir, eid, xpix, ypix, batch_size, num_batches):
     spike_times = spikes['probe00']['times']
     spike_clusters = spikes['probe00']['clusters']
 
-    build_hdf5_for_decoding(save_dir + '/data.hdf5', str(cam_data), [spike_times, spike_clusters], batch_size, 
+    build_hdf5_for_decoding(save_dir + '/data.hdf5', str(cam_data), [spike_times, spike_clusters], cam_ts, batch_size, 
         num_batches, labels=label_data, pose_algo='dlc', xpix=xpix, ypix=ypix)
 
 
