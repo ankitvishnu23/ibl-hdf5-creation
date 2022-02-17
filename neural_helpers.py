@@ -119,7 +119,7 @@ def bincount2D(x, y, xbin=0, ybin=0, xlim=None, ylim=None, weights=None):
 
 
 def get_binsize(str_times):
-        times_arr = []
+    times_arr = []
     for i in range(len(str_times)):
         # get the timestamp without day information
         time_str = str_times[i][11:27]

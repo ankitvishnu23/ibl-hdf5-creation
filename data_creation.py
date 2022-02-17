@@ -54,7 +54,6 @@ def build_hdf5_for_decoding(
     # load video capture
     video_cap = cv2.VideoCapture(video_file)
     n_total_frames = video_cap.get(cv2.CAP_PROP_FRAME_COUNT)
-    total_duration = video_cap.get(cv2.)
     xpix_og = int(video_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     ypix_og = int(video_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = int(video_cap.get(cv2.CAP_PROP_FPS))
@@ -212,7 +211,7 @@ def main(save_dir, eid, xpix, ypix, batch_size, num_batches):
     spike_times = spikes['probe00']['times']
     spike_clusters = spikes['probe00']['clusters']
 
-    build_hdf5_for_decoding(save_dir + '/data.hdf5', str(cam_data), [spike_times, spike_clusters], batch_size, 
+    build_hdf5_for_decoding(save_dir + '/data.hdf5', str(cam_data), [spike_times, spike_clusters], cam_ts, batch_size, 
         num_batches, labels=label_data, pose_algo='dlc', xpix=xpix, ypix=ypix)
 
 
