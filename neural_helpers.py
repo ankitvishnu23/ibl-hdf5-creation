@@ -1,6 +1,6 @@
 import numpy as np
 
-__all__ = ['bincount2D', 'get_spike_trial_data']
+__all__ = ['bincount2D', 'get_spike_trial_data', 'get_binsize']
 
 
 def get_spike_trial_data(times, clusters, intervals, binsize=0.02):
@@ -118,3 +118,19 @@ def bincount2D(x, y, xbin=0, ybin=0, xlim=None, ylim=None, weights=None):
     return r, xscale, yscale
 
 
+def get_binsize(str_times):
+        times_arr = []
+    for i in range(len(str_times)):
+        # get the timestamp without day information
+        time_str = str_times[i][11:27]
+        # hour
+        time = int(time_str[0:2]) * 3600
+        # minutes
+        time += int(time_str[3:5]) * 60
+        # seconds
+        time += float(time_str[6:16])
+        
+        times_arr.append(time)
+    assert len(times_arr) == len(str_times)
+
+    return np.median(np.diff(times_arr))
