@@ -188,8 +188,8 @@ def main(save_dir, eid, xpix, ypix, batch_size, num_batches):
         os.makedirs(os.path.dirname(save_dir + '/raw_data'))
 
     # initialize one object to retrieve data
-    one = ONE(base_url='https://openalyx.internationalbrainlab.org', cache_dir=save_dir + '/raw_data',
-          password='international', silent=True)
+    one = ONE(cache_dir=save_dir + '/raw_data',
+          password='international', base_url='https://openalyx.internationalbrainlab.org', silent=True)
 
     # get cam datasets (currently only using left cam data)
     try:
@@ -207,9 +207,11 @@ def main(save_dir, eid, xpix, ypix, batch_size, num_batches):
         label_data = None
 
     # Get spikes dict 
-    spikes, clusters, channels = bbone.load_spike_sorting_with_channel(eid, one=one)
-    spike_times = spikes['probe00']['times']
-    spike_clusters = spikes['probe00']['clusters']
+    # spikes, clusters, channels = bbone.load_spike_sorting_with_channel(eid, one=one)
+    spike_times = one.load_dataset(eid, f'alf/probe00/spikes.times.npy')
+    spike_clusters = one.load_dataset(eid, f'alf/probe00/spikes.clusters.npy')
+    # spike_times = spikes['probe00']['times']
+    # spike_clusters = spikes['probe00']['clusters']
 
     build_hdf5_for_decoding(save_dir + '/data.hdf5', str(cam_data), [spike_times, spike_clusters], cam_ts, batch_size, 
         num_batches, labels=label_data, pose_algo='dlc', xpix=xpix, ypix=ypix)
